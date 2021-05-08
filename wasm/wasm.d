@@ -1,6 +1,7 @@
-module wasm.wasm;
+module wasm;
 
 import std.algorithm : map, maxElement;
+import std.conv : to;
 
 extern (C):
 
@@ -9,7 +10,7 @@ extern (C):
  */
 extern ubyte __heap_base;
 extern void foundPatternCallback(long x, long z, int w, int h);
-extern void progressCallback(int percent);
+extern void progressCallback(double percent);
 
 /*
  * Core functions
@@ -62,16 +63,18 @@ int findMaxHeight()
     return 0;
 }
 
-bool* arr;
-bool paused = false;
-int pausedZ;
-
-bool solved = false;
-
-void findSlimeChunks(const long seed, const int radius)
+struct RestorePoint
 {
-  if (solved)
-    return;
+  bool active = false;
+  int z;
+}
+
+RestorePoint restorePoint;
+
+bool* arr;
+
+void findSlimeChunks(const long seed, const int radius, const int runLength)
+{
   immutable int size = radius * 2;
   immutable int maxHeight = findMaxHeight();
 
@@ -80,25 +83,23 @@ void findSlimeChunks(const long seed, const int radius)
 
   // Grid of radius*2 x max pattern height
   // Only maxHeight rows are necessary at once
-  if (!paused)
+  if (!restorePoint.active)
     arr = cast(bool*) malloc(size * maxHeight);
 
-  int lastProgressZ;
+  int chunksProcessed;
   foreach (ref int z; -radius .. radius + maxHeight)
   {
-    if (paused)
+    if (restorePoint.active)
     {
-      paused = false;
-      lastProgressZ = pausedZ + radius;
-      z = pausedZ + 1;
+      z = restorePoint.z + 1;
+      restorePoint.active = false;
     }
 
-    if (z < radius && abs(z + radius - lastProgressZ) > size / 100)
+    if (chunksProcessed >= runLength)
     {
-      progressCallback((z + radius) / (size / 100));
-      lastProgressZ = z + radius;
-      paused = true;
-      pausedZ = z;
+      progressCallback((z + radius).to!double / (size / 100));
+      restorePoint.z = z;
+      restorePoint.active = true;
       return;
     }
 
@@ -111,19 +112,19 @@ void findSlimeChunks(const long seed, const int radius)
     if (z + radius >= maxHeight - 1)
     {
       // Check for patterns
-      immutable int zPattern = z - (maxHeight - 1);
+      immutable int patternZ = z - (maxHeight - 1);
       foreach (pattern; patterns)
-        if (zPattern + radius + pattern.h < size)
+        if (patternZ + radius + pattern.h < size)
           foreach (x; -radius .. radius - pattern.w)
-            if (checkGrid(arr, maxHeight, radius, size, x, zPattern, pattern.w, pattern.h))
-              foundPatternCallback(x * 16, zPattern * 16, pattern.w, pattern.h);
+            if (checkGrid(arr, maxHeight, radius, size, x, patternZ, pattern.w, pattern.h))
+              foundPatternCallback(x * 16, patternZ * 16, pattern.w, pattern.h);
     }
+    chunksProcessed += size;
   }
   progressCallback(100);
-  solved = true;
 }
 
-bool checkGrid(bool* arr, int maxHeight, long radius, long size, long x,
+pure bool checkGrid(bool* arr, int maxHeight, long radius, long size, long x,
     long z, int width, int height)
 {
   foreach (x2; 0 .. width)
@@ -133,7 +134,7 @@ bool checkGrid(bool* arr, int maxHeight, long radius, long size, long x,
   return true;
 }
 
-bool isSlimeChunk(long seed, long x, long z)
+pure bool isSlimeChunk(long seed, long x, long z)
 {
   // Minecraft code:
   // Do not write += here

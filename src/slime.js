@@ -1,49 +1,79 @@
-/*
- * Callbacks:
- * extern void foundPatternCallback(long x, long z, int w, int h);
- * extern void progressCallback(int percent);
- */
-export async function findSlimeChunks(
-  seed,
-  radius,
-  patterns,
-  foundPatternCallback,
-  progressCallback
-) {
-  seed = BigInt(seed);
-  radius = Math.floor(radius);
+// extern void foundPatternCallback(long x, long z, int w, int h);
+const foundPatternCallback = (x, z, w, h) => {
+  slimeFinder.results.push({ x, z, w, h });
+  slimeFinder.results = slimeFinder.results;
+};
 
-  const importObject = {
-    env: { foundPatternCallback, progressCallback },
-  };
+// extern void progressCallback(double percent);
+const progressCallback = (progress) => {
+  slimeFinder.progress = progress;
+  slimeFinder = slimeFinder;
+};
 
-  const { instance } = await WebAssembly.instantiateStreaming(
-    fetch("wasm.wasm"),
-    importObject
-  );
-
-  console.log(instance);
-
-  // Make space for patterns
-  instance.exports.memory.grow(1 + (patterns.length * 2 * 4) / (64 * 1024));
-
-  // Transfer patterns array
-  instance.exports.createPatternArray(patterns.length);
-  for (let i = 0; i < patterns.length; i++) {
-    let w = Math.floor(patterns[i].w);
-    let h = Math.floor(patterns[i].h);
-    instance.exports.setPattern(i, w, h);
+class SlimeFinder {
+  constructor() {
+    this.progress = 0;
+    this.results = [];
+    this.busy = false;
+    this.interval = 0;
+    this.onUpdate = () => {};
   }
 
-  // Make space for chunks array
-  let maxHeight = instance.exports.findMaxHeight();
-  instance.exports.memory.grow(1 + (radius * 2 * maxHeight) / (64 * 1024));
+  break() {
+    this.busy = false;
+  }
 
-  // Find chunks
-  for (const _ of Array(101)) {
-    setTimeout(
-      async () => instance.exports.findSlimeChunks(seed, radius),
-      1
+  async findSlimeChunks(seed, radius, patterns) {
+    this.progress = 0;
+    this.results = [];
+
+    seed = BigInt(seed);
+    radius = Math.floor(radius);
+
+    if (radius < 1)
+      return;
+
+    this.busy = true;
+
+    const importObject = {
+      env: {
+        foundPatternCallback,
+        progressCallback,
+      },
+    };
+
+    const { instance } = await WebAssembly.instantiateStreaming(
+      fetch("wasm.wasm"),
+      importObject
     );
+
+    // console.log(instance);
+
+    // Make space for patterns
+    instance.exports.memory.grow(1 + (patterns.length * 2 * 4) / (64 * 1024));
+
+    // Transfer patterns array
+    instance.exports.createPatternArray(patterns.length);
+    for (let i = 0; i < patterns.length; i++) {
+      let w = Math.floor(patterns[i].w);
+      let h = Math.floor(patterns[i].h);
+      instance.exports.setPattern(i, w, h);
+    }
+
+    // Make space for chunks array
+    let maxHeight = instance.exports.findMaxHeight();
+    instance.exports.memory.grow(1 + (radius * 2 * maxHeight) / (64 * 1024));
+
+    this.interval = setInterval(async () => {
+      if (this.busy && this.progress < 100) {
+        instance.exports.findSlimeChunks(seed, radius, 100_000);
+      } else {
+        clearInterval(this.interval);
+        this.busy = false;
+      }
+      this.onUpdate();
+    }, 0);
   }
 }
+
+export let slimeFinder = new SlimeFinder();

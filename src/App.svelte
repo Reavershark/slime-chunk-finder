@@ -2,33 +2,14 @@
   import Config from "./Config.svelte";
   import Patterns from "./Patterns.svelte";
   import Results from "./Results.svelte";
-  import { findSlimeChunks } from "./slime";
+  import { slimeFinder } from "./slime";
 
-  let patterns, radius, seed, results;
+  let seed, radius, patterns;
 
-  let progress = 0;
+  slimeFinder.onUpdate = () => (slimeFinder = slimeFinder);
 
-  const foundPatternCallback = (x, z, w, h) => {
-    results.push({ x, z, w, h });
-    results = results;
-  };
-
-  const progressCallback = (percent) => {
-    progress = percent;
-    console.log(percent);
-  };
-
-  const handleClick = () => {
-    results = [];
-    progress = 0;
-    findSlimeChunks(
-      seed,
-      radius,
-      patterns,
-      foundPatternCallback,
-      progressCallback
-    );
-  };
+  const handleStart = () => slimeFinder.findSlimeChunks(seed, radius, patterns);
+  const handleStop = () => slimeFinder.break();
 </script>
 
 <div class="outer">
@@ -39,19 +20,23 @@
     <div class="box">
       <Config bind:seed bind:radius />
       <p>
-        <button on:click={handleClick}>Find chunks</button>
-        Progress: {progress}%
+        <button disabled={slimeFinder.busy} on:click={handleStart}
+          >Find chunks</button
+        >
+        Progress: {slimeFinder.progress}%
+      </p>
+      <p>
+        <button disabled={!slimeFinder.busy} on:click={handleStop}>Stop</button>
       </p>
     </div>
   </div>
   <div class="column">
     <div class="box">
-      <Results bind:results />
+      <Results bind:results={slimeFinder.results} />
     </div>
   </div>
 </div>
 
-<!-- Map -->
 <style>
   .outer {
     margin: auto;
