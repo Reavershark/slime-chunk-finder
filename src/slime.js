@@ -30,7 +30,7 @@ class SlimeFinder {
     seed = BigInt(seed);
     radius = Math.floor(radius);
 
-    if (radius < 1)
+    if (radius < 1 || patterns.length < 1)
       return;
 
     this.busy = true;
