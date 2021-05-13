@@ -1,5 +1,5 @@
 <script>
-  export let seed = 0;
+  export let seed = "0";
   export let radius = 1000;
 </script>
 
@@ -7,7 +7,7 @@
   <table>
     <tr>
       <td><p>World seed:</p></td>
-      <td><input type="number" bind:value={seed} /></td>
+      <td><input type="text" bind:value={seed} /></td>
     </tr>
     <tr>
       <td><p>Search radius:</p></td>
